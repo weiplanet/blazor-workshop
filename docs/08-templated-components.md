@@ -40,8 +40,8 @@ It looks like:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Components" Version="3.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="3.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="3.1.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="3.1.3" />
   </ItemGroup>
 
 </Project>
@@ -49,7 +49,7 @@ It looks like:
 
 There are a few things here worth understanding. 
 
-Firstly, the package targets `netstandard2.0`. Server-side Blazor uses `netcoreapp3.0` and client-side Blazor uses `netstandard2.0` - so targeting `netstandard2.0` means that it will work for either scenario.
+Firstly, the package targets `netstandard2.0`. Blazor Server uses `netcoreapp3.1` and Blazor WebAssembly uses `netstandard2.1` - so targeting `netstandard2.0` means that it will work for either scenario.
 
 Additional, the `<RazorLangVersion>3.0</RazorLangVersion>` sets the Razor language version. Version 3 is needed to support components and the `.razor` file extension. 
 
@@ -79,6 +79,12 @@ This doesn't do anything yet because we haven't added any parameters. Recall fro
 2. Render the dialog conditionally if it is supposed to be shown
 
 First, add a parameter called `ChildContent` of type `RenderFragment`. The name `ChildContent` is a special parameter name, and is used by convention when a component wants to accept a single content parameter.
+
+```razor
+@code {
+    [Parameter] public RenderFragment ChildContent { get; set; }
+}
+```
 
 Next, update the markup to *render* the `ChildContent` in the middle of the markup. It should look like this:
 
@@ -110,7 +116,7 @@ Next, to give this dialog some conditional behavior, let's add a parameter of ty
 }
 ```
 
-Do build and make sure that everything compiles at this stage. Next we'll get down to using this new component.
+Build the solution and make sure that everything compiles at this stage. Next we'll get down to using this new component.
 
 ## Adding a reference to the templated library
 
@@ -168,9 +174,9 @@ We'll use this new templated component from `Index.razor`. Open `Index.razor` an
 @if (OrderState.ShowingConfigureDialog)
 {
     <ConfigurePizzaDialog
-        Pizza="@OrderState.ConfiguringPizza"
-        OnConfirm="@OrderState.ConfirmConfigurePizzaDialog"
-        OnCancel="@OrderState.CancelConfigurePizzaDialog" />
+        Pizza="OrderState.ConfiguringPizza"
+        OnConfirm="OrderState.ConfirmConfigurePizzaDialog"
+        OnCancel="OrderState.CancelConfigurePizzaDialog" />
 }
 ```
 
@@ -187,19 +193,19 @@ We are going to remove this and replace it with an invocation of the new compone
 
 This is wiring up our new `TemplatedDialog` component to show and hide itself based on `OrderState.ShowingConfigureDialog`. Also, we're passing in some content to the `ChildContent` parameter. Since we called the parameter `ChildContent` any content that is placed inside the `<TemplatedDialog> </TemplatedDialog>` will be captured by a `RenderFragment` delegate and passed to `TemplatedDialog`. 
 
-note: A templated component may have multiple `RenderFragment` parameters. What we're showing here is a convenient convention when the caller wants to provide a single `RenderFragment` that represents the *main* content.
+> Note: A templated component may have multiple `RenderFragment` parameters. What we're showing here is a convenient convention when the caller wants to provide a single `RenderFragment` that represents the *main* content.
 
 At this point it should be possible to run the code and see that the new dialog works correctly. Verify that this is working correctly before moving on to the next step.
 
 ## A more advanced templated component
 
-Now that we've done a basic templated dialog, we're going to try something more sophisticated. Recall that the `MyOrders.razor` page has shows a list of orders, but it also contains three-state logic (loading, empty list, and showing items). If we could extract that logic into a reusable component, would that be useful? Let's give it a try.
+Now that we've done a basic templated dialog, we're going to try something more sophisticated. Recall that the `MyOrders.razor` page shows a list of orders, but it also contains three-state logic (loading, empty list, and showing items). If we could extract that logic into a reusable component, would that be useful? Let's give it a try.
 
 Start by creating a new file `TemplatedList.razor` in the `BlazingComponents` project. We want this list to have a few features:
 1. Async-loading of any type of data
 2. Separate rendering logic for three states - loading, empty list, and showing items
 
-We can solve async loading by accepting a delegate of type `Func<Task<List<?>>>` - we need to figure out what type should replace **?**. Since we want to support any kind of data, we need to declare this component as a generic type. We can make a generic-typed component using the `@typeparam` directive, so place this at the top of `TemplatedList.razor`.
+We can solve async loading by accepting a delegate of type `Func<Task<IEnumerable<?>>>` - we need to figure out what type should replace **?**. Since we want to support any kind of data, we need to declare this component as a generic type. We can make a generic-typed component using the `@typeparam` directive, so place this at the top of `TemplatedList.razor`.
 
 ```html
 @typeparam TItem
@@ -207,15 +213,15 @@ We can solve async loading by accepting a delegate of type `Func<Task<List<?>>>`
 
 Making a generic-typed component works similarly to other generic types in C#, in fact `@typeparam` is just a convenient Razor syntax for a generic .NET type.
 
-note: We don't yet have support for type-parameter-constraints. This is something we're looking to add in the future.
+> Note: We don't yet have support for type-parameter-constraints. This is something we're looking to add in the future.
 
-Now that we've defined by a generic type parameter we can use it in a parameter declaration. Let's add a parameter to accept a delegate we can use to load data, and then load the data in a similar fashion to our other components.
+Now that we've defined a generic type parameter we can use it in a parameter declaration. Let's add a parameter to accept a delegate we can use to load data, and then load the data in a similar fashion to our other components.
 
 ```html
 @code {
-    List<TItem> items;
+    IEnumerable<TItem> items;
 
-    [Parameter] public Func<Task<List<TItem>>> Loader { get; set; }
+    [Parameter] public Func<Task<IEnumerable<TItem>>> Loader { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -231,7 +237,7 @@ Since we have the data, we can now add the structure of each of the states we ne
 {
 
 }
-else if (items.Count == 0)
+else if (!items.Any())
 {
 }
 else
@@ -247,7 +253,7 @@ else
 }
 ```
 
-Now, these are our three states of the dialog, and we'd like accept a content parameter for each one so the caller can plug in the desired content. We do this by defining three `RenderFragment` parameters. Since we have multiple we'll just give them their own descriptive names instead of calling them `ChildContent`. However, the content for showing an an item needs to take a parameter. We can do this by using `RenderFragment<T>`.
+Now, these are our three states of the dialog, and we'd like to accept a content parameter for each one so the caller can plug in the desired content. We do this by defining three `RenderFragment` parameters. Since we have multiple `RenderFragment` parameters we'll just give each one their own descriptive names instead of calling them `ChildContent`. The content for showing an item needs to take a parameter. We can do this by using `RenderFragment<T>`.
 
 Here's an example of the three parameters to add:
 
@@ -264,7 +270,7 @@ Now that we have some `RenderFragment` parameters, we can start using them. Upda
 {
     @Loading
 }
-else if (items.Count == 0)
+else if (!items.Any())
 {
     @Empty
 }
@@ -289,9 +295,9 @@ Let's add another `string` parameter, and finally the functions block of `Templa
 
 ```html
 @code {
-    List<TItem> items;
+    IEnumerable<TItem> items;
 
-    [Parameter] public Func<Task<List<TItem>>> Loader { get; set; }
+    [Parameter] public Func<Task<IEnumerable<TItem>>> Loader { get; set; }
     [Parameter] public RenderFragment Loading { get; set; }
     [Parameter] public RenderFragment Empty { get; set; }
     [Parameter] public RenderFragment<TItem> Item { get; set; }
@@ -313,7 +319,7 @@ Lastly update the `<div class="list-group">` to contain `<div class="list-group 
 {
     @Loading
 }
-else if (items.Count == 0)
+else if (!items.Any())
 {
     @Empty
 }
@@ -330,9 +336,9 @@ else
 }
 
 @code {
-    List<TItem> items;
+    IEnumerable<TItem> items;
 
-    [Parameter] public Func<Task<List<TItem>>> Loader { get; set; }
+    [Parameter] public Func<Task<IEnumerable<TItem>>> Loader { get; set; }
     [Parameter] public RenderFragment Loading { get; set; }
     [Parameter] public RenderFragment Empty { get; set; }
     [Parameter] public RenderFragment<TItem> Item { get; set; }
@@ -349,20 +355,29 @@ else
 
 To use the new `TemplatedList` component, we're going to edit `MyOrders.razor`.
 
-First, we need to create a delegate that we can pass to the `TemplatedList` that will load order data. We can do this by keeping the line of code that's in `MyOrders.OnParametersSetAsync` and changing the method signature. The `@code` block should look something like:
+First, we need to create a delegate that we can pass to the `TemplatedList` that will load order data. We can do this by keeping the code that's in `MyOrders.OnParametersSetAsync` and changing the method signature. The `@code` block should look something like:
 
 ```html
 @code {
-    Task<List<OrderWithStatus>> LoadOrders()
+    async Task<IEnumerable<OrderWithStatus>> LoadOrders()
     {
-        return HttpClient.GetJsonAsync<List<OrderWithStatus>>("orders");
+        var ordersWithStatus = Enumerable.Empty<OrderWithStatus>();
+        try
+        {
+            ordersWithStatus = await OrdersClient.GetOrders();
+        }
+        catch (AccessTokenNotAvailableException ex)
+        {
+            ex.Redirect();
+        }
+        return ordersWithStatus;
     }
 }
 ```
 
-This matches the signature expected by the `Loader` parameter of `TemplatedList`, it's a `Func<Task<List<?>>>` where the **?** is replaced with `OrderWithStatus` so we are on the right track.
+This matches the signature expected by the `Loader` parameter of `TemplatedList`, it's a `Func<Task<IEnumerable<?>>>` where the **?** is replaced with `OrderWithStatus` so we are on the right track.
 
-If you use the `TemplatedList` component now like so:
+You can use the `TemplatedList` component now like so:
 
 ```html
 <div class="main">
@@ -382,7 +397,7 @@ Adding the `Loader` attribute should fix the issue.
 </div>
 ```
 
-note: A generic-typed component can have its type-parameters manually specified as well by setting the attribute with a matching name to the type parameter - in this case it's called `TItem`. There are some cases where this is necessary so it's worth knowing.
+> Note: A generic-typed component can have its type-parameters manually specified as well by setting the attribute with a matching name to the type parameter - in this case it's called `TItem`. There are some cases where this is necessary so it's worth knowing.
 
 ```html
 <div class="main">
@@ -466,12 +481,14 @@ There were a number of steps and new features to introduce here. Run this and ma
 
 To prove that the list is really working correctly we can try the following: 
 1. Delete the `pizza.db` from the `Blazor.Server` project to test the case where there are no orders
-2. Add an `await Task.Delay(3000);` to `LoadOrders` to test the case where we're still loading
+2. Add an `await Task.Delay(3000);` to `LoadOrders` (also marking that method as `async`) to test the case where we're still loading
 
 ## Summary
 
-So what have we seen in this section?
+So what have we seen in this session?
 
 1. It's possible to write components that accept *content* as a parameter - even multiple content parameters
-2. Templated components can by used to abstract like showing a dialog, or async loading of data
-3. Components can be generic types which makes them more reusable
+2. Templated components can be used to abstract things, like showing a dialog, or async loading of data
+3. Components can be generic types, which makes them more reusable
+
+Next up - [Progressive web app](09-progressive-web-app.md)

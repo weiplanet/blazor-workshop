@@ -1,6 +1,7 @@
 ﻿@page "/myorders"
-@inject HttpClient HttpClient
 @attribute [Authorize]
+@inject OrdersClient OrdersClient
+@inject NavigationManager NavigationManager
 
 <div class="main">
     <TemplatedList Loader="@LoadOrders" ListGroupClass="orders-list">
@@ -30,9 +31,17 @@
 </div>
 
 @code {
-    async Task<List<OrderWithStatus>> LoadOrders()
+    async Task<IEnumerable<OrderWithStatus>> LoadOrders()
     {
-        await Task.Delay(3000);
-        return await HttpClient.GetJsonAsync<List<OrderWithStatus>>("orders");
+        var ordersWithStatus = Enumerable.Empty<OrderWithStatus>();
+        try
+        {
+            ordersWithStatus = await OrdersClient.GetOrders();
+        }
+        catch (AccessTokenNotAvailableException ex)
+        {
+            ex.Redirect();
+        }
+        return ordersWithStatus;
     }
 }

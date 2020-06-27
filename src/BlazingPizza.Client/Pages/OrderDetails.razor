@@ -1,8 +1,8 @@
 ﻿@page "/myorders/{orderId:int}"
-@using System.Threading
-@inject HttpClient HttpClient
-@implements IDisposable
 @attribute [Authorize]
+@using System.Threading
+@inject OrdersClient OrdersClient
+@implements IDisposable
 
 <div class="main">
     @if (invalidOrder)
@@ -53,31 +53,43 @@
         PollForUpdates();
     }
 
-    void IDisposable.Dispose()
-    {
-        pollingCancellationToken?.Cancel();
-    }
-
     private async void PollForUpdates()
     {
+        invalidOrder = false;
         pollingCancellationToken = new CancellationTokenSource();
         while (!pollingCancellationToken.IsCancellationRequested)
         {
             try
             {
-                invalidOrder = false;
-                orderWithStatus = await HttpClient.GetJsonAsync<OrderWithStatus>($"orders/{OrderId}");
+                orderWithStatus = await OrdersClient.GetOrder(OrderId);
+                StateHasChanged();
+
+                if (orderWithStatus.IsDelivered)
+                {
+                    pollingCancellationToken.Cancel();
+                }
+                else
+                {
+                    await Task.Delay(4000);
+                }
+            }
+            catch (AccessTokenNotAvailableException ex)
+            {
+                pollingCancellationToken.Cancel();
+                ex.Redirect();
             }
             catch (Exception ex)
             {
                 invalidOrder = true;
                 pollingCancellationToken.Cancel();
                 Console.Error.WriteLine(ex);
+                StateHasChanged();
             }
-
-            StateHasChanged();
-
-            await Task.Delay(4000);
         }
+    }
+
+    void IDisposable.Dispose()
+    {
+        pollingCancellationToken?.Cancel();
     }
 }
